@@ -133,7 +133,7 @@ function renderMsg(m, idx) {
 function renderAll() {
   renderSessions();
   const s = activeSession();
-  $('#session-title').textContent = s ? (s.title || '未命名章节') : '墨案';
+  $('#session-title').textContent = s ? (s.title || '未命名章节') : 'AI 写文小工具';
   renderMessages();
 }
 
@@ -719,7 +719,7 @@ function renameTitle() {
       saveAll(); renderSessions();
     }
     input.replaceWith(el);
-    el.textContent = s ? s.title : '墨案';
+    el.textContent = s ? s.title : 'AI 写文小工具';
   };
   input.addEventListener('blur', done);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });

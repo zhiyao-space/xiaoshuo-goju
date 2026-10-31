@@ -65,8 +65,7 @@ textarea, input, select { font-family: inherit; }
   border-radius: 8px;
 }
 .logo-mark svg { display: block; }
-.logo-mark .cut { fill: var(--invert-bg); stroke: var(--invert-bg); }
-.logo-text { font-size: 18px; font-weight: 600; letter-spacing: 6px; font-family: var(--font-read); }
+.logo-text { font-size: 16.5px; font-weight: 600; letter-spacing: 1px; font-family: var(--font-read); white-space: nowrap; }
 
 .btn {
   background: var(--panel-2);
@@ -144,8 +143,8 @@ textarea, input, select { font-family: inherit; }
 
 .empty-state { text-align: center; padding: 12vh 20px 0; color: var(--text-dim); }
 .empty-mark {
-  font-family: var(--font-read); font-size: 52px; font-weight: 700;
-  letter-spacing: 18px; text-indent: 18px;
+  font-family: var(--font-read); font-size: 34px; font-weight: 700;
+  letter-spacing: 6px; text-indent: 6px;
   color: var(--text);
 }
 .empty-sub { margin-top: 10px; font-size: 13px; letter-spacing: 8px; text-indent: 8px; color: var(--text-faint); }
@@ -386,5 +385,5 @@ textarea, input, select { font-family: inherit; }
   #sidebar { position: fixed; z-index: 800; height: 100%; box-shadow: 8px 0 30px rgba(0,0,0,.4); }
   #btn-toggle-side { display: grid; }
   .messages { padding: 20px 14px 30px; }
-  .empty-mark { font-size: 38px; letter-spacing: 12px; text-indent: 12px; }
+  .empty-mark { font-size: 24px; letter-spacing: 4px; text-indent: 4px; }
 }

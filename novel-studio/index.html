@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>墨案 · AI 小说工坊</title>
+<title>AI 写文小工具</title>
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <meta name="theme-color" content="#0a0a0a">
 <link rel="stylesheet" href="style.css">
@@ -12,7 +12,7 @@
 <div id="app">
   <aside id="sidebar">
     <div class="side-head">
-      <div class="logo"><span class="logo-mark"><svg viewBox="0 0 64 64" width="20" height="20" aria-hidden="true"><path d="M32 47 C 23.5 39 16.5 30.5 16.5 20.5 C 16.5 15 22 12 32 12 C 42 12 47.5 15 47.5 20.5 C 47.5 30.5 40.5 39 32 47 Z" fill="currentColor"/><circle class="cut" cx="32" cy="22.5" r="3"/><path class="cut" d="M32 26 L 32 42.5" stroke-width="1.7" stroke-linecap="round"/><circle cx="32" cy="53.5" r="2.4" fill="currentColor" opacity=".55"/></svg></span><span class="logo-text">墨案</span></div>
+      <div class="logo"><span class="logo-mark"><svg viewBox="0 0 64 64" width="21" height="21" aria-hidden="true"><circle cx="26" cy="27" r="9.5" fill="currentColor"/><path d="M12.5 51 C 12.5 40.5 19 37 26 37 C 33 37 39.5 40.5 39.5 51 Z" fill="currentColor"/><path d="M37.5 45 C 42.5 41 44.5 36.5 45 31.5" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="M47.5 13.5 L 50 21.5 L 58 24 L 50 26.5 L 47.5 34.5 L 45 26.5 L 37 24 L 45 21.5 Z" fill="currentColor"/><circle cx="56.5" cy="12.5" r="1.6" fill="currentColor" opacity=".7"/></svg></span><span class="logo-text">AI 写文小工具</span></div>
       <button id="btn-new-session" class="btn btn-block" title="新建会话">＋ 新建会话</button>
     </div>
     <div id="session-list" class="session-list"></div>
@@ -41,8 +41,8 @@
 
     <div id="chat" class="chat">
       <div id="empty-state" class="empty-state">
-        <div class="empty-mark">墨案</div>
-        <div class="empty-sub">AI 小说工坊</div>
+        <div class="empty-mark">AI 写文小工具</div>
+        <div class="empty-sub">把想法写成故事</div>
         <p>在下方输入你的构想，开始创作第一章。<br>可在「设置」中配置 API 与文风设定。</p>
       </div>
       <div id="messages" class="messages"></div>
