@@ -4,15 +4,11 @@
       <stop offset="0%" stop-color="#1e1e1e"/>
       <stop offset="100%" stop-color="#050505"/>
     </radialGradient>
-    <linearGradient id="nib" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#ffffff"/>
-      <stop offset="100%" stop-color="#c4c4c4"/>
-    </linearGradient>
   </defs>
   <rect width="64" height="64" rx="14" fill="url(#bg)"/>
-  <circle cx="32" cy="30" r="23.5" fill="none" stroke="#ffffff" stroke-opacity=".1" stroke-width="1.4" stroke-dasharray="120 28" stroke-linecap="round" transform="rotate(-60 32 30)"/>
-  <path d="M32 47 C 23.5 39 16.5 30.5 16.5 20.5 C 16.5 15 22 12 32 12 C 42 12 47.5 15 47.5 20.5 C 47.5 30.5 40.5 39 32 47 Z" fill="url(#nib)"/>
-  <circle cx="32" cy="22.5" r="3" fill="#0a0a0a"/>
-  <path d="M32 26 L 32 42.5" stroke="#0a0a0a" stroke-width="1.7" stroke-linecap="round"/>
-  <circle cx="32" cy="53.5" r="2.4" fill="#f2f2f2"/>
+  <circle cx="26" cy="27" r="9.5" fill="#f2f2f2"/>
+  <path d="M12.5 51 C 12.5 40.5 19 37 26 37 C 33 37 39.5 40.5 39.5 51 Z" fill="#f2f2f2"/>
+  <path d="M37.5 45 C 42.5 41 44.5 36.5 45 31.5" fill="none" stroke="#f2f2f2" stroke-width="4" stroke-linecap="round"/>
+  <path d="M47.5 13.5 L 50 21.5 L 58 24 L 50 26.5 L 47.5 34.5 L 45 26.5 L 37 24 L 45 21.5 Z" fill="#ffffff"/>
+  <circle cx="56.5" cy="12.5" r="1.6" fill="#ffffff" opacity=".7"/>
 </svg>
