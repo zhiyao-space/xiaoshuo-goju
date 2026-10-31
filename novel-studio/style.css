@@ -62,9 +62,10 @@ textarea, input, select { font-family: inherit; }
   width: 34px; height: 34px;
   background: var(--invert-bg); color: var(--invert-text);
   display: grid; place-items: center;
-  font-family: var(--font-read); font-size: 19px; font-weight: 700;
   border-radius: 8px;
 }
+.logo-mark svg { display: block; }
+.logo-mark .cut { fill: var(--invert-bg); stroke: var(--invert-bg); }
 .logo-text { font-size: 18px; font-weight: 600; letter-spacing: 6px; font-family: var(--font-read); }
 
 .btn {
