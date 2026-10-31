@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>墨案 · AI 小说工坊</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<meta name="theme-color" content="#0a0a0a">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="side-head">
+      <div class="logo"><span class="logo-mark">墨</span><span class="logo-text">墨案</span></div>
+      <button id="btn-new-session" class="btn btn-block" title="新建会话">＋ 新建会话</button>
+    </div>
+    <div id="session-list" class="session-list"></div>
+    <div class="side-foot">
+      <button id="btn-export" class="side-btn" title="导出本章">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 3v10.586l-3.293-3.293-1.414 1.414L12 16.414l4.707-4.707-1.414-1.414L12 13.586V3h2V1h-4v2h2zM5 19h14v2H5v-2z"/></svg>
+        <span>导出章节</span>
+      </button>
+      <button id="btn-settings" class="side-btn" title="设置">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 8a4 4 0 100 8 4 4 0 000-8zm0 6a2 2 0 110-4 2 2 0 010 4zm8.94-2a8.94 8.94 0 00-.14-1.5l2.02-1.57-2-3.46-2.38.96a8.9 8.9 0 00-2.6-1.5L15.5 2h-4l-.34 2.93a8.9 8.9 0 00-2.6 1.5l-2.38-.96-2 3.46 2.02 1.57a8.94 8.94 0 000 3l-2.02 1.57 2 3.46 2.38-.96a8.9 8.9 0 002.6 1.5L11.5 22h4l.34-2.93a8.9 8.9 0 002.6-1.5l2.38.96 2-3.46-2.02-1.57c.09-.49.14-.99.14-1.5z"/></svg>
+        <span>设置</span>
+      </button>
+    </div>
+  </aside>
+
+  <main id="main">
+    <header id="topbar">
+      <button id="btn-toggle-side" class="icon-btn" title="会话列表">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M3 5h18v2H3V5zm0 6h18v2H3v-2zm0 6h18v2H3v-2z"/></svg>
+      </button>
+      <div id="session-title" title="点击重命名">未命名章节</div>
+      <button id="btn-theme" class="icon-btn" title="黑白切换">
+        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M12 3a9 9 0 109 9c0-.46-.04-.92-.1-1.36a5.39 5.39 0 01-4.4 2.26 5.4 5.4 0 01-3.14-9.8c-.45-.06-.9-.1-1.36-.1z"/></svg>
+      </button>
+    </header>
+
+    <div id="chat" class="chat">
+      <div id="empty-state" class="empty-state">
+        <div class="empty-mark">墨案</div>
+        <div class="empty-sub">AI 小说工坊</div>
+        <p>在下方输入你的构想，开始创作第一章。<br>可在「设置」中配置 API 与文风设定。</p>
+      </div>
+      <div id="messages" class="messages"></div>
+    </div>
+
+    <div id="generating-bar" class="generating-bar hidden">
+      <span class="gen-dot"></span><span>正在生成…</span>
+      <button id="btn-stop" class="btn-stop">停止</button>
+    </div>
+
+    <footer id="composer">
+      <div id="quote-preview" class="quote-preview hidden">
+        <span id="quote-text"></span>
+        <button id="btn-remove-quote" class="icon-btn">✕</button>
+      </div>
+      <div class="composer-row">
+        <textarea id="input" rows="1" placeholder="输入小说设定、剧情走向或「开始写作」…（Enter 发送，Shift+Enter 换行）"></textarea>
+        <button id="btn-send" class="send-btn" title="发送">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+        </button>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<div id="ctx-menu" class="ctx-menu hidden"></div>
+
+<div id="modal-settings" class="modal hidden">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-tabs">
+        <button class="tab active" data-tab="api">API 接入</button>
+        <button class="tab" data-tab="style">文风设定</button>
+        <button class="tab" data-tab="skin">界面美化</button>
+      </div>
+      <button class="icon-btn modal-close" data-close="modal-settings">✕</button>
+    </div>
+    <div class="modal-body">
+      <section class="tab-pane active" id="pane-api">
+        <div class="preset-row">
+          <label class="field">
+            <span>API 预设方案</span>
+            <select id="cfg-preset"></select>
+          </label>
+          <button id="btn-preset-add" class="btn">＋ 新增</button>
+          <button id="btn-preset-del" class="btn btn-ghost">删除</button>
+        </div>
+        <label class="field">
+          <span>备注名称</span>
+          <input id="cfg-name" type="text" placeholder="例：DeepSeek 主力 / GPT 备用">
+        </label>
+        <label class="field">
+          <span>API 地址（OpenAI 兼容，以 /v1 结尾）</span>
+          <input id="cfg-base" type="text" placeholder="https://api.openai.com/v1">
+        </label>
+        <label class="field">
+          <span>API Key</span>
+          <input id="cfg-key" type="password" placeholder="sk-...（仅保存在本地浏览器）">
+        </label>
+        <label class="field">
+          <span>模型（点「拉取模型」自动获取，输入即快捷搜索，↑↓ 选择）</span>
+          <div class="model-combo">
+            <input id="cfg-model" type="text" autocomplete="off" placeholder="gpt-4o / deepseek-chat …">
+            <button id="btn-fetch-models" class="btn">拉取模型</button>
+            <div id="model-list" class="model-list hidden"></div>
+          </div>
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>温度</span>
+            <input id="cfg-temp" type="number" min="0" max="2" step="0.1" value="0.9">
+          </label>
+          <label class="field">
+            <span>单次最大输出 Token</span>
+            <input id="cfg-maxtok" type="number" min="256" step="128" value="4096">
+          </label>
+        </div>
+        <label class="field">
+          <span>系统提示词（可自由定制，决定 AI 行为）</span>
+          <textarea id="cfg-sys" rows="4"></textarea>
+        </label>
+        <p class="hint">Key 仅保存在浏览器 localStorage，请求只发往你填写的地址。可建立多套预设，下拉切换后点「保存」即保存并启用当前预设。</p>
+      </section>
+
+      <section class="tab-pane" id="pane-style">
+        <label class="field">
+          <span>题材 / 世界观背景</span>
+          <textarea id="cfg-world" rows="3" placeholder="例：东方玄幻大陆，灵气复苏时代，主角是落魄书生…"></textarea>
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>文风基调</span>
+            <select id="cfg-tone">
+              <option value="">（自由发挥）</option>
+              <option>冷峻凌厉</option>
+              <option>细腻绵密</option>
+              <option>古雅凝练</option>
+              <option>华丽瑰丽</option>
+              <option>轻快诙谐</option>
+              <option>悬疑压抑</option>
+              <option>热血昂扬</option>
+              <option>白描纪实</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>叙事人称</span>
+            <select id="cfg-pov">
+              <option value="">（不限）</option>
+              <option>第一人称</option>
+              <option>第三人称限知</option>
+              <option>第三人称全知</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>单章篇幅</span>
+            <select id="cfg-len">
+              <option value="800-1200字">短（800-1200字）</option>
+              <option value="1500-2500字" selected>中（1500-2500字）</option>
+              <option value="3000-5000字">长（3000-5000字）</option>
+            </select>
+          </label>
+        </div>
+        <label class="field">
+          <span>自定义写作指令（随每次请求发送）</span>
+          <textarea id="cfg-instr" rows="3" placeholder="例：每章以场景描写开头；对话多用短句；禁止上帝视角剧透…"></textarea>
+        </label>
+      </section>
+
+      <section class="tab-pane" id="pane-skin">
+        <label class="field">
+          <span>自定义美化 CSS（实时生效，最高优先级）</span>
+          <textarea id="cfg-css" rows="10" spellcheck="false" placeholder="/* 例：&#10;.messages { font-family: 'Noto Serif SC', serif; }&#10;#topbar { letter-spacing: 2px; } */"></textarea>
+        </label>
+        <div class="skin-actions">
+          <button id="btn-ai-skin" class="btn">让 AI 写一套美化样式</button>
+          <button id="btn-clear-css" class="btn btn-ghost">恢复默认</button>
+        </div>
+        <p class="hint">AI 会读取当前界面结构并生成一套纯黑白风格的自定义 CSS，自动应用并保存。</p>
+      </section>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-close="modal-settings">取消</button>
+      <button id="btn-save-settings" class="btn btn-primary">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="modal-confirm" class="modal hidden">
+  <div class="modal-box modal-small">
+    <div class="modal-body"><p id="confirm-text" style="text-align:center"></p></div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-close="modal-confirm">取消</button>
+      <button id="btn-confirm-ok" class="btn btn-primary">确定</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
