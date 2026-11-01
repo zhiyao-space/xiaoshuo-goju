@@ -475,13 +475,99 @@ async function continueStory(idx) {
 
 /* ---------- 导出 ---------- */
 
+function safeName(s) {
+  return (s || '未命名').replace(/[\\/:*?"<>|]/g, '_').slice(0, 40) || '未命名';
+}
+
 function download(name, text, type) {
-  const blob = new Blob([text], { type });
+  const blob = new Blob(["\ufeff", text], { type });
+  const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  a.href = url;
   a.download = name;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(a.href);
+  setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 5000);
+  toast('已开始下载：' + name);
+}
+
+function chapterContent(s) {
+  return s.messages.filter(m => m.role === 'assistant').map(m => m.content).join('\n\n');
+}
+
+function buildBook(list, md) {
+  const parts = [];
+  list.forEach(s => {
+    const c = chapterContent(s);
+    if (!c) return;
+    if (md) parts.push(`## ${s.title || '未命名章节'}\n\n${c}`);
+    else parts.push(`【${s.title || '未命名章节'}】\n\n${c}`);
+  });
+  if (!parts.length) return null;
+  if (md) return `# 全本（共 ${list.length} 章）\n\n` + parts.join('\n\n\n');
+  return parts.join('\n\n————————\n\n');
+}
+
+function exportChoice(x, y) {
+  const s = activeSession();
+  swallowNextMenuClose = true;
+  openCtxMenu(x, y, [
+    { label: '当前章节 · TXT', disabled: !s || !s.messages.length, fn: () => {
+        const text = chapterContent(s);
+        if (!text) return toast('本章还没有正文');
+        download(`${safeName(s.title)}.txt`, text, 'text/plain;charset=utf-8');
+      } },
+    { label: '当前章节 · Markdown', disabled: !s || !s.messages.length, fn: () => {
+        const lines = [`# ${s.title || '未命名章节'}`, ''];
+        for (const m of s.messages) lines.push(m.role === 'user' ? `> **创作指令：** ${m.content}\n` : m.content + '\n');
+        download(`${safeName(s.title)}.md`, lines.join('\n'), 'text/markdown;charset=utf-8');
+      } },
+    { label: '复制本章全文', disabled: !s || !s.messages.length, fn: () => copyText(chapterContent(s)) },
+    '-',
+    { label: '选择章节导出…', disabled: !sessions.length, fn: openExportPicker },
+    { label: '整本合并 · TXT', disabled: !sessions.length, fn: () => {
+        const text = buildBook(sessions, false);
+        if (!text) return toast('还没有任何正文');
+        download(`全本_${sessions.length}章.txt`, text, 'text/plain;charset=utf-8');
+      } },
+    { label: '整本合并 · Markdown', disabled: !sessions.length, fn: () => {
+        const text = buildBook(sessions, true);
+        if (!text) return toast('还没有任何正文');
+        download(`全本_${sessions.length}章.md`, text, 'text/markdown;charset=utf-8');
+      } }
+  ]);
+  const menu = $('#ctx-menu');
+  const r = $('#btn-export').getBoundingClientRect();
+  menu.style.left = r.left + 'px';
+  menu.style.top = Math.max(8, r.top - menu.offsetHeight - 10) + 'px';
+}
+
+function openExportPicker() {
+  if (!sessions.length) return toast('暂无任何章节');
+  const box = $('#export-chapter-list');
+  box.innerHTML = '';
+  sessions.forEach((s, i) => {
+    const lab = document.createElement('label');
+    lab.className = 'export-item';
+    const n = s.messages.filter(m => m.role === 'assistant').length;
+    lab.innerHTML = `<input type="checkbox" value="${s.id}" checked><span class="t"></span><span class="cnt"></span>`;
+    lab.querySelector('.t').textContent = s.title || ('未命名章节 ' + (i + 1));
+    lab.querySelector('.cnt').textContent = n ? n + ' 段正文' : '空';
+    box.appendChild(lab);
+  });
+  $('#modal-export').classList.remove('hidden');
+}
+
+function exportSelected(md) {
+  const ids = [...document.querySelectorAll('#export-chapter-list input:checked')].map(i => i.value);
+  if (!ids.length) return toast('请先勾选要导出的章节');
+  const list = sessions.filter(s => ids.includes(s.id));
+  const text = buildBook(list, md);
+  if (!text) return toast('所选章节还没有正文');
+  download(`全本_${list.length}章.${md ? 'md' : 'txt'}`, text, md ? 'text/markdown;charset=utf-8' : 'text/plain;charset=utf-8');
+  $('#modal-export').classList.add('hidden');
 }
 
 function exportChoice(x, y) {
@@ -811,6 +897,8 @@ function init() {
     $('#modal-confirm').classList.add('hidden');
     if (confirmCb) { const cb = confirmCb; confirmCb = null; cb(); }
   });
+  $('#btn-export-sel-txt').addEventListener('click', () => exportSelected(false));
+  $('#btn-export-sel-md').addEventListener('click', () => exportSelected(true));
 
   document.querySelectorAll('[data-close]').forEach(b => b.addEventListener('click', () => {
     $('#' + b.dataset.close).classList.add('hidden');
