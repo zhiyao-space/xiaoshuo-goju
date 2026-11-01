@@ -202,6 +202,23 @@
   </div>
 </div>
 
+<div id="modal-export" class="modal hidden">
+  <div class="modal-box modal-small">
+    <div class="modal-head">
+      <div style="font-size:15px;font-weight:600;letter-spacing:1px">选择要导出的章节</div>
+      <button class="icon-btn modal-close" data-close="modal-export">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="export-chapter-list"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" data-close="modal-export">取消</button>
+      <button id="btn-export-sel-txt" class="btn">导出 TXT</button>
+      <button id="btn-export-sel-md" class="btn btn-primary">导出 MD</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast hidden"></div>
 
 <script src="app.js"></script>
