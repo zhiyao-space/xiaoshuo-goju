@@ -313,7 +313,9 @@ function openCtxMenu(x, y, items) {
   menu.style.left = Math.min(x, innerWidth - r.width - 8) + 'px';
   menu.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
 }
-function closeCtxMenu() { $('#ctx-menu').classList.add('hidden'); }
+function closeCtxMenu() { $('#ctx-menu').classList.add('hidden'); swallowNextMenuClose = false; }
+
+let swallowNextMenuClose = false;
 
 async function copyText(t) {
   try { await navigator.clipboard.writeText(t); toast('已复制'); }
@@ -374,6 +376,7 @@ function bindLongPress() {
     sx = e.touches[0].clientX; sy = e.touches[0].clientY;
     timer = setTimeout(() => {
       timer = null;
+      swallowNextMenuClose = true;
       showFor(sx, sy - 10, target);
       if (navigator.vibrate) navigator.vibrate(15);
     }, 480);
@@ -396,6 +399,7 @@ function bindLongPress() {
     sx = e.clientX; sy = e.clientY;
     timer = setTimeout(() => {
       timer = null;
+      swallowNextMenuClose = true;
       showFor(sx, sy - 10, found);
     }, 480);
   });
@@ -481,6 +485,7 @@ function download(name, text, type) {
 }
 
 function exportChoice(x, y) {
+  swallowNextMenuClose = true;
   openCtxMenu(x, y, [
     { label: '导出 TXT（正文）', fn: () => {
         const s = activeSession();
@@ -822,7 +827,10 @@ function init() {
   });
 
   document.addEventListener('click', (e) => {
-    if (!e.target.closest('#ctx-menu')) closeCtxMenu();
+    if (!e.target.closest('#ctx-menu')) {
+      if (swallowNextMenuClose) swallowNextMenuClose = false;
+      else closeCtxMenu();
+    }
     if (!e.target.closest('.model-combo')) closeModelList();
     if (innerWidth <= 768 && !e.target.closest('#sidebar') && !e.target.closest('#btn-toggle-side')) {
       $('#sidebar').classList.add('collapsed');
