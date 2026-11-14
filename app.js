@@ -863,7 +863,10 @@ function saveImgData() {
 function ensureIllust(m) {
   if (!m.illust || !Array.isArray(m.illust.fragments) || !m.illust.fragments.length) {
     const paras = (m.content || '').split(/\n\s*\n/).map(t => t.trim()).filter(Boolean);
-    const list = paras.length > 1 ? paras : [(m.content || '').trim() || '（空片段）'];
+    let list = paras.length > 1 ? paras : [(m.content || '').trim() || '（空片段）'];
+    // 跳过章节标题行、序号行和过短段落，只对真正有画面内容的段落配图
+    const meaningful = list.filter(t => !/^(#{1,6}\s|[-*>\s]|第.{1,8}[章回节卷]|序章|楔子|章节目录)/.test(t) && t.length >= 15);
+    if (meaningful.length) list = meaningful;
     m.illust = {
       fragments: list.map(t => ({ id: NAI.uid2(), text: t, note: '', autoCount: 0, imageIds: [], mainId: null }))
     };
@@ -1002,7 +1005,7 @@ function dataUriToBlob(uri) {
 function buildIllCfg() {
   const size = NAI.SIZE_PRESETS[Number($('#ill-size').value)] || NAI.SIZE_PRESETS[0];
   return {
-    prompt: currentPrompt(),
+    prompt: (illustCtx && illustCtx.overridePrompt) || currentPrompt(),
     negative: ($('#ill-neg').value || '').trim(),
     width: size.w, height: size.h,
     steps: Number($('#ill-steps').value) || 28,
@@ -1059,7 +1062,81 @@ async function illGenerate(times) {
   illBusy = false;
   $('#btn-ill-generate').disabled = false;
   $('#btn-ill-batch').disabled = false;
+  if (illustCtx) illustCtx.overridePrompt = null;
   toast(errors.length ? `完成，但${errors.length}张失败：${errors[0]}` : '生成完成');
+}
+
+/* ---------- AI 自动提示词（调用文本 API 提炼画面） ---------- */
+
+const AUTO_SYS = '你是 NovelAI 画图提示词专家。请把给定的小说片段提炼成一段可直接用于 NovelAI（动漫二次元风格）生图的英文提示词。要求：tag 式英文短语、逗号分隔；包含画面主体、动作、场景、氛围、光线、构图；只保留可画出的视觉信息，忽略心理与抽象描写；开头加画质 tag（如 best quality, anime style, highly detailed）。只输出 JSON，格式：{"positive":"英文提示词","negative":"英文负面提示词（如 lowres, bad anatomy, blurry 等）"}。不要输出任何其他文字。';
+
+async function aiMakePrompt(text) {
+  if (!settings.base || !settings.model) {
+    toast('请先在「设置 → API 接入」配置文本 API');
+    $('#modal-illust').classList.add('hidden');
+    openSettings(); switchTab('api');
+    throw new Error('未配置文本 API');
+  }
+  const url = settings.base.replace(/\/+$/, '') + '/chat/completions';
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(settings.key ? { 'Authorization': 'Bearer ' + settings.key } : {}) },
+    body: JSON.stringify({
+      model: settings.model, temperature: 0.8, max_tokens: 400,
+      messages: [
+        { role: 'system', content: AUTO_SYS },
+        { role: 'user', content: '小说片段：\n' + text.slice(0, 900) }
+      ]
+    })
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const j = await res.json();
+  const raw = j.choices?.[0]?.message?.content || '';
+  let pos = '', neg = '';
+  const mjson = raw.match(/\{[\s\S]*\}/);
+  if (mjson) { try { const o = JSON.parse(mjson[0]); pos = o.positive || ''; neg = o.negative || ''; } catch {} }
+  if (!pos) pos = raw.replace(/```[\s\S]*?```/g, '').trim().slice(0, 300);
+  if (!pos) throw new Error('AI 未返回有效提示词');
+  return { pos, neg };
+}
+
+async function illAutoPrompt() {
+  const f = currentFrag();
+  if (!f) return;
+  persistFragmentFields();
+  const btn = $('#btn-ill-auto');
+  btn.disabled = true; btn.textContent = 'AI 提炼中…';
+  try {
+    const r = await aiMakePrompt((f.note ? f.note + '：' : '') + f.text);
+    f.aiPrompt = r.pos; saveAll();
+    $('#ill-pos').value = r.pos;
+    if (r.neg) $('#ill-neg').value = r.neg;
+    persistPromptFields();
+    toast('AI 提示词已填入，可直接生成');
+  } catch (e) {
+    if (e.message !== '未配置文本 API') toast('AI 提示词失败：' + e.message);
+  }
+  btn.disabled = false; btn.textContent = 'AI 生成提示词';
+}
+
+async function illResplit() {
+  const m = illustMsg();
+  if (!m) return;
+  askConfirm('按正文重新切分片段？已生成图片会保留（集中到第一个片段），各片段备注与张数将重置。', () => {
+    const imgs = m.illust.fragments.flatMap(f => f.imageIds);
+    const mainId = m.illust.fragments.map(f => f.mainId).find(Boolean) || imgs[0] || null;
+    m.illust = null;
+    ensureIllust(m);
+    if (imgs.length) {
+      const f0 = m.illust.fragments[0];
+      f0.imageIds = imgs;
+      f0.mainId = mainId;
+    }
+    illustCtx.fragIdx = 0;
+    renderIllustFragments(); loadFragmentFields(); renderIllPreview();
+    renderMessages(); hydrateIllust();
+    toast('已按正文重新切分');
+  });
 }
 
 async function illBatch() {
@@ -1069,14 +1146,32 @@ async function illBatch() {
   persistFragmentFields();
   const plan = m.illust.fragments.map((f, i) => ({ f, i })).filter(x => x.f.autoCount > 0);
   if (!plan.length) return toast('没有片段设置自动张数（>0），无法批量');
+  const autoMode = $('#ill-auto-mode').checked;
+  const fails = [];
   for (const { f, i } of plan) {
     illustCtx.fragIdx = i;
     $('#ill-fragment').value = i;
     loadFragmentFields();
     renderIllustFragments();
+    if (autoMode) {
+      // 全自动：逐段调用文本 API 提炼画面提示词，无需手动输入
+      try {
+        const r = await aiMakePrompt((f.note ? f.note + '：' : '') + f.text);
+        illustCtx.overridePrompt = r.pos;
+        $('#ill-pos').value = r.pos;
+        if (r.neg && !$('#ill-neg').value.trim()) $('#ill-neg').value = r.neg;
+        persistPromptFields();
+      } catch (e) {
+        fails.push(`片段${i + 1}提示词：${e.message}`);
+        continue;
+      }
+    } else {
+      illustCtx.overridePrompt = null;
+    }
     await illGenerate(f.autoCount);
   }
-  toast('整章批量生图结束');
+  illustCtx.overridePrompt = null;
+  toast('整章批量生图结束' + (fails.length ? `（${fails.length}段提示词失败：${fails[0]}）` : ''));
 }
 
 function renderIllPreview() {
@@ -1464,6 +1559,8 @@ function init() {
   $('#btn-ill-import-meta').addEventListener('click', illImportMeta);
   $('#btn-ill-generate').addEventListener('click', () => illGenerate());
   $('#btn-ill-batch').addEventListener('click', illBatch);
+  $('#btn-ill-auto').addEventListener('click', illAutoPrompt);
+  $('#btn-ill-resplit').addEventListener('click', illResplit);
 
   $('#vibe-off').addEventListener('click', () => setVibeMode('off'));
   $('#vibe-vibe').addEventListener('click', () => setVibeMode('vibe'));
