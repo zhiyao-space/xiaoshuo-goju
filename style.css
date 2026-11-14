@@ -433,3 +433,6 @@ textarea, input, select { font-family: inherit; }
 
 /* 图文混排：配图紧跟对应段落 */
 .msg-illust { margin: 10px auto 14px; }
+
+.charlib-box { margin-top: 12px; }
+.charlib-box textarea { width: 100%; font-size: 12px; line-height: 1.6; padding: 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--panel-2); color: var(--text); font-family: var(--font-ui); resize: vertical; }

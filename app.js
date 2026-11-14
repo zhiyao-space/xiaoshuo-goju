@@ -889,7 +889,7 @@ function ensureIllust(m) {
     const paras = (m.content || '').split(/\n\s*\n/).map(t => t.trim()).filter(Boolean);
     let list = paras.length > 1 ? paras : [(m.content || '').trim() || '（空片段）'];
     // 跳过章节标题行、序号行和过短段落，只对真正有画面内容的段落配图
-    const meaningful = list.filter(t => !/^(#{1,6}\s|[-*>\s]|第.{1,8}[章回节卷]|序章|楔子|章节目录)/.test(t) && t.length >= 15);
+ const meaningful = list.filter(t => !/^(#{1,6}[ \t]|[-*>]|第.{1,8}[章回节卷]|序章|楔子|章节目录)/.test(t) && t.length >= 15);
     if (meaningful.length) list = meaningful;
     m.illust = {
       fragments: list.map(t => ({ id: NAI.uid2(), text: t, note: '', autoCount: 0, imageIds: [], mainId: null }))
@@ -920,6 +920,7 @@ async function openIllust(idx) {
   renderIllustStyles();
   renderIllustOptions();
   setVibeMode('off');
+  $('#charlib').value = charLib || '';
   $('#ill-pos').value = imgOpts.pos || '';
   $('#ill-neg').value = imgOpts.neg || '';
   loadFragmentFields();
@@ -1092,36 +1093,67 @@ async function illGenerate(times) {
 
 /* ---------- AI 自动提示词（调用文本 API 提炼画面） ---------- */
 
-const AUTO_SYS = '你是 NovelAI 画图提示词专家。请把给定的小说片段提炼成一段可直接用于 NovelAI（动漫二次元风格）生图的英文提示词。要求：tag 式英文短语、逗号分隔；包含画面主体、动作、场景、氛围、光线、构图；只保留可画出的视觉信息，忽略心理与抽象描写；开头加画质 tag（如 best quality, anime style, highly detailed）。只输出 JSON，格式：{"positive":"英文提示词","negative":"英文负面提示词（如 lowres, bad anatomy, blurry 等）"}。不要输出任何其他文字。';
+const AUTO_SYS = '你是 NovelAI 画图提示词专家。把给定的小说片段提炼成可直接用于 NovelAI（动漫二次元风格）生图的英文提示词。\n硬性要求：\n1. 忠实还原人物形象：凡出场角色，必须按「角色形象设定」逐项写出发色、瞳色、发型、服饰、体态、表情；设定中未给出的外貌细节，可依据人物性格与身份合理补全，不得省略为泛泛的 1girl/1boy。\n2. 画面细节丰富：主体动作与姿势、多人互动关系、场景环境元素、时间天气、光影氛围、镜头构图（如 cowboy shot, from above）都要写到。\n3. tag 式英文短语、逗号分隔，positive 控制在 80-150 个词，不要压缩成一句概括。\n4. 只保留可画出的视觉信息，忽略心理与抽象描写；开头加画质 tag（best quality, amazing quality, very aesthetic, anime style）。\n5. 如给出「画风提示词」，将其并入 positive 末尾。\n只输出 JSON：{"positive":"英文提示词","negative":"英文负面提示词"}，不要输出任何其他文字。';
 
-async function aiMakePrompt(text) {
-  if (!settings.base || !settings.model) {
-    toast('请先在「设置 → API 接入」配置文本 API');
-    $('#modal-illust').classList.add('hidden');
-    openSettings(); switchTab('api');
-    throw new Error('未配置文本 API');
-  }
-  const url = settings.base.replace(/\/+$/, '') + '/chat/completions';
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', ...(settings.key ? { 'Authorization': 'Bearer ' + settings.key } : {}) },
-    body: JSON.stringify({
-      model: settings.model, temperature: 0.8, max_tokens: 400,
-      messages: [
-        { role: 'system', content: AUTO_SYS },
-        { role: 'user', content: '小说片段：\n' + text.slice(0, 900) }
-      ]
-    })
-  });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  const j = await res.json();
-  const raw = j.choices?.[0]?.message?.content || '';
-  let pos = '', neg = '';
-  const mjson = raw.match(/\{[\s\S]*\}/);
-  if (mjson) { try { const o = JSON.parse(mjson[0]); pos = o.positive || ''; neg = o.negative || ''; } catch {} }
-  if (!pos) pos = raw.replace(/```[\s\S]*?```/g, '').trim().slice(0, 300);
-  if (!pos) throw new Error('AI 未返回有效提示词');
-  return { pos, neg };
+const LS_CHARS = 'inkan.chars.v1';
+let charLib = load(LS_CHARS, '');
+
+function parseCharLib(raw) {
+ const docs = [];
+ (raw || '').split('\n').forEach(line => {
+ const t = line.trim();
+ if (!t) return;
+ const parts = t.split('|');
+ const name = (parts[0] || '').trim();
+ const desc = (parts[1] || '').trim();
+ if (name && desc) docs.push(name + ': ' + desc);
+ });
+ return docs;
+}
+
+function saveCharLib() {
+ charLib = $('#charlib').value;
+ save(LS_CHARS, charLib);
+}
+
+async function aiMakePrompt(text, stylePos) {
+ if (!settings.base || !settings.model) {
+ toast('请先在「设置 → API 接入」配置文本 API');
+ $('#modal-illust').classList.add('hidden');
+ openSettings(); switchTab('api');
+ throw new Error('未配置文本 API');
+ }
+ const docs = parseCharLib(charLib || $('#charlib').value);
+ const userParts = [];
+ if (docs.length) userParts.push('【角色形象设定】\n' + docs.join('\n'));
+ if (stylePos) userParts.push('【画风提示词（并入 positive 末尾）】' + stylePos);
+ userParts.push('【小说片段】\n' + text.slice(0, 1600));
+ const url = settings.base.replace(/\/+$/, '') + '/chat/completions';
+ const res = await fetch(url, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json', ...(settings.key ? { Authorization: 'Bearer ' + settings.key } : {}) },
+ body: JSON.stringify({
+ model: settings.model, temperature: 0.8, max_tokens: 700,
+ messages: [
+ { role: 'system', content: AUTO_SYS },
+ { role: 'user', content: userParts.join('\n\n') }
+ ]
+ })
+ });
+ if (!res.ok) throw new Error('HTTP ' + res.status);
+ const j = await res.json();
+ const raw = j.choices?.[0]?.message?.content || '';
+ let pos = '', neg = '';
+ const mjson = raw.match(/\{[\s\S]*\}/);
+ if (mjson) { try { const o = JSON.parse(mjson[0]); pos = o.positive || ''; neg = o.negative || ''; } catch {} }
+ if (!pos) pos = raw.replace(/```[\s\S]*?```/g, '').trim().slice(0, 400);
+ if (!pos) throw new Error('AI 未返回有效提示词');
+ return { pos, neg };
+}
+
+function currentStylePos() {
+ const st = imgStyles.find(x => x.id === $('#ill-style').value);
+ return st && st.pos ? st.pos.replace('{content}', '').trim() : '';
 }
 
 async function illAutoPrompt() {
@@ -1131,7 +1163,7 @@ async function illAutoPrompt() {
   const btn = $('#btn-ill-auto');
   btn.disabled = true; btn.textContent = 'AI 提炼中…';
   try {
-    const r = await aiMakePrompt((f.note ? f.note + '：' : '') + f.text);
+    const r = await aiMakePrompt((f.note ? f.note + '：' : '') + f.text, currentStylePos());
     f.aiPrompt = r.pos; saveAll();
     $('#ill-pos').value = r.pos;
     if (r.neg) $('#ill-neg').value = r.neg;
@@ -1180,7 +1212,7 @@ async function illBatch() {
     if (autoMode) {
       // 全自动：逐段调用文本 API 提炼画面提示词，无需手动输入
       try {
-        const r = await aiMakePrompt((f.note ? f.note + '：' : '') + f.text);
+        const r = await aiMakePrompt((f.note ? f.note + '：' : '') + f.text, currentStylePos());
         illustCtx.overridePrompt = r.pos;
         $('#ill-pos').value = r.pos;
         if (r.neg && !$('#ill-neg').value.trim()) $('#ill-neg').value = r.neg;
@@ -1584,6 +1616,7 @@ function init() {
   $('#btn-ill-generate').addEventListener('click', () => illGenerate());
   $('#btn-ill-batch').addEventListener('click', illBatch);
   $('#btn-ill-auto').addEventListener('click', illAutoPrompt);
+ $('#charlib').addEventListener('change', saveCharLib);
   $('#btn-ill-resplit').addEventListener('click', illResplit);
 
   $('#vibe-off').addEventListener('click', () => setVibeMode('off'));
