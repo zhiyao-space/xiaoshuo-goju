@@ -126,20 +126,44 @@ function renderMsg(m, idx) {
     <div class="msg-body"></div>`;
   el.querySelector('.msg-time').textContent = m.t ? new Date(m.t).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : '';
   const body = el.querySelector('.msg-body');
-  if (m.role === 'user') body.textContent = m.content;
-  else body.innerHTML = mdLite(m.content);
-  if (m.illust && m.illust.fragments) {
-    for (const f of m.illust.fragments) {
-      if (f.mainId) {
-        const img = document.createElement('img');
-        img.className = 'msg-illust';
-        img.dataset.imgid = f.mainId;
-        img.alt = '片段配图';
-        body.appendChild(img);
+  if (m.role === 'user') {
+    body.textContent = m.content;
+  } else {
+    const frags = (m.illust && Array.isArray(m.illust.fragments)) ? m.illust.fragments : null;
+    if (!frags) {
+      body.innerHTML = mdLite(m.content);
+    } else {
+      // 图文混排：配图内嵌到对应段落位置
+      const paras = m.content.split(/\n\s*\n/).filter(p => p.trim());
+      const usedTexts = new Set();
+      paras.forEach(p => {
+        const wrap = document.createElement('div');
+        wrap.innerHTML = mdLite(p);
+        while (wrap.firstChild) body.appendChild(wrap.firstChild);
+        const t = p.trim();
+        for (const f of frags) {
+          if (f.mainId && f.text.trim() === t) {
+            usedTexts.add(t);
+            body.appendChild(makeIllustImg(f.mainId));
+          }
+        }
+      });
+      // 正文被编辑过导致文字对不上的片段，配图追加到消息末尾
+      for (const f of frags) {
+        if (f.mainId && !usedTexts.has(f.text.trim())) body.appendChild(makeIllustImg(f.mainId));
       }
     }
   }
   return el;
+}
+
+function makeIllustImg(imgId) {
+  const img = document.createElement('img');
+  img.className = 'msg-illust';
+  img.dataset.imgid = imgId;
+  img.alt = '片段配图';
+  img.loading = 'lazy';
+  return img;
 }
 
 async function hydrateIllust(root) {
