@@ -1,0 +1,137 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* ===== 小说画境 · 深色墨与朱 · 设计系统 ===== */
+:root {
+  /* 底色：深墨蓝 */
+  --background: oklch(0.155 0.018 265);
+  --card: oklch(0.205 0.022 265);
+  --card-hover: oklch(0.235 0.024 265);
+  --popover: oklch(0.19 0.02 265);
+  --foreground: oklch(0.93 0.012 265);
+  --muted: oklch(0.25 0.02 265);
+  --muted-foreground: oklch(0.66 0.02 265);
+  /* 主色：朱红 */
+  --primary: oklch(0.64 0.19 33);
+  --primary-foreground: oklch(0.98 0.01 33);
+  /* 次色：金 */
+  --secondary: oklch(0.79 0.1 85);
+  --secondary-foreground: oklch(0.2 0.02 85);
+  --accent: oklch(0.3 0.04 33);
+  --accent-foreground: oklch(0.93 0.012 265);
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.98 0.01 25);
+  --border: oklch(0.3 0.02 265);
+  --input: oklch(0.24 0.02 265);
+  --ring: oklch(0.64 0.19 33);
+  --radius: 0.5rem;
+  /* 扩展 token */
+  --panel: oklch(0.18 0.02 265);
+  --gold: oklch(0.79 0.1 85);
+  --glow: oklch(0.64 0.19 33 / 0.35);
+  --font-display: "Noto Serif SC", "Songti SC", serif;
+  --font-body: "Noto Sans SC", "PingFang SC", system-ui, sans-serif;
+}
+
+/* 深色为唯一主题；.dark 与 :root 一致，保证 next-themes class 模式不出错 */
+.dark {
+  --background: oklch(0.155 0.018 265);
+  --card: oklch(0.205 0.022 265);
+  --card-hover: oklch(0.235 0.024 265);
+  --popover: oklch(0.19 0.02 265);
+  --foreground: oklch(0.93 0.012 265);
+  --muted: oklch(0.25 0.02 265);
+  --muted-foreground: oklch(0.66 0.02 265);
+  --primary: oklch(0.64 0.19 33);
+  --primary-foreground: oklch(0.98 0.01 33);
+  --secondary: oklch(0.79 0.1 85);
+  --secondary-foreground: oklch(0.2 0.02 85);
+  --accent: oklch(0.3 0.04 33);
+  --accent-foreground: oklch(0.93 0.012 265);
+  --destructive: oklch(0.55 0.2 25);
+  --destructive-foreground: oklch(0.98 0.01 25);
+  --border: oklch(0.3 0.02 265);
+  --input: oklch(0.24 0.02 265);
+  --ring: oklch(0.64 0.19 33);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-card: var(--card);
+  --color-card-hover: var(--card-hover);
+  --color-popover: var(--popover);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-panel: var(--panel);
+  --color-gold: var(--gold);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html, body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-body);
+  }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 4px; }
+}
+
+/* 标题字体 */
+.font-display {
+  font-family: var(--font-display);
+}
+
+/* 朱红发光按钮 hover */
+.glow-hover {
+  transition: box-shadow 0.25s ease, transform 0.2s ease;
+}
+.glow-hover:hover {
+  box-shadow: 0 0 18px var(--glow);
+}
+
+/* 纸纹质感背景 */
+.ink-texture {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 20% 0%, oklch(0.64 0.19 33 / 0.07), transparent),
+    radial-gradient(ellipse 60% 40% at 90% 10%, oklch(0.79 0.1 85 / 0.05), transparent);
+}
+
+/* 段落文字链接下划线动画 */
+.story-link {
+  position: relative;
+}
+.story-link::after {
+  content: "";
+  position: absolute;
+  left: 0; bottom: -2px;
+  width: 100%; height: 1.5px;
+  background: var(--primary);
+  transform: scaleX(0);
+  transform-origin: bottom right;
+  transition: transform 0.3s ease;
+}
+.story-link:hover::after {
+  transform: scaleX(1);
+  transform-origin: bottom left;
+}
