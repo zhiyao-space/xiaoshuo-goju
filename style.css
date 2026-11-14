@@ -398,3 +398,35 @@ textarea, input, select { font-family: inherit; }
   .messages { padding: 20px 14px 30px; }
   .empty-mark { font-size: 24px; letter-spacing: 4px; text-indent: 4px; }
 }
+
+/* ---------- 生图工坊 & 图库 ---------- */
+
+.modal-box.modal-wide { max-width: 860px; width: calc(100vw - 32px); max-height: calc(100vh - 80px); overflow: auto; }
+.illust-grid { display: grid; grid-template-columns: 1fr 1.2fr; gap: 14px; }
+@media (max-width: 768px) { .illust-grid { grid-template-columns: 1fr; } }
+.illust-left, .illust-right { min-width: 0; }
+.illust-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.illust-result { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+.illust-result-head { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; letter-spacing: 1px; }
+.illust-preview { display: flex; flex-wrap: wrap; gap: 10px; }
+.ill-thumb { position: relative; width: 110px; height: 110px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; cursor: pointer; }
+.ill-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ill-thumb.main { border-color: var(--text); box-shadow: 0 0 0 1px var(--text); }
+.ill-num { position: absolute; right: 4px; bottom: 4px; font-size: 10px; background: var(--invert-bg); color: var(--invert-text); border-radius: 4px; padding: 1px 5px; opacity: .85; }
+.illust-empty { color: var(--text-faint); font-size: 12px; padding: 12px 0; }
+
+.vibe-box { border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-top: 10px; }
+.vibe-modes { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-vibe.active { background: var(--invert-bg); color: var(--invert-text); border-color: var(--invert-bg); }
+.vibe-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.vibe-preview { max-width: 72px; max-height: 72px; border-radius: 6px; border: 1px solid var(--border-strong); object-fit: cover; }
+.vibe-slider input[type="range"] { width: 100%; accent-color: var(--text); }
+
+.msg-illust { display: block; max-width: min(420px, 100%); max-height: 420px; width: auto; margin: 12px auto 4px; border-radius: 8px; border: 1px solid var(--border-strong); object-fit: contain; }
+
+.gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.gallery-thumb { aspect-ratio: 1; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; cursor: pointer; }
+.gallery-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .15s; }
+.gallery-thumb:hover img { transform: scale(1.04); }
+#gallery-detail img { max-width: 100%; max-height: 55vh; display: block; margin: 0 auto 10px; border-radius: 8px; border: 1px solid var(--border-strong); }
+.gallery-meta { font-size: 12px; color: var(--text-dim); margin: 8px 0; line-height: 1.7; word-break: break-all; }
