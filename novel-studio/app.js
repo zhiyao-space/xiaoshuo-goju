@@ -111,6 +111,7 @@ function renderMessages() {
   $('#empty-state').classList.toggle('hidden', !!s && s.messages.length > 0);
   if (!s) return;
   s.messages.forEach((m, i) => box.appendChild(renderMsg(m, i)));
+  hydrateIllust(box);
   scrollBottom();
 }
 
@@ -127,7 +128,26 @@ function renderMsg(m, idx) {
   const body = el.querySelector('.msg-body');
   if (m.role === 'user') body.textContent = m.content;
   else body.innerHTML = mdLite(m.content);
+  if (m.illust && m.illust.fragments) {
+    for (const f of m.illust.fragments) {
+      if (f.mainId) {
+        const img = document.createElement('img');
+        img.className = 'msg-illust';
+        img.dataset.imgid = f.mainId;
+        img.alt = '片段配图';
+        body.appendChild(img);
+      }
+    }
+  }
   return el;
+}
+
+async function hydrateIllust(root) {
+  const imgs = (root || document).querySelectorAll('img.msg-illust[data-imgid]:not([src])');
+  for (const img of imgs) {
+    const url = await NAI.getImageUrl(img.dataset.imgid);
+    if (url) img.src = url;
+  }
 }
 
 function renderAll() {
@@ -351,6 +371,7 @@ function bindLongPress() {
       { label: '复制', fn: () => copyText(m.content) },
       { label: '编辑', fn: () => startEdit(found) },
       { label: '引用', fn: () => setQuote(m.content, m.role === 'user' ? '你' : 'AI') },
+      { label: '配图', disabled: !isAI, fn: () => openIllust(found.idx) },
       '-',
       { label: '撤回', fn: () => askConfirm('撤回该条及其后所有内容？', () => {
           s.messages.splice(found.idx);
@@ -686,6 +707,9 @@ function openSettings() {
   $('#cfg-len').value = settings.len || '1500-2500字';
   $('#cfg-instr').value = settings.instr || '';
   $('#cfg-css').value = settings.css || '';
+  editImgApiId = imgOpts.activeApi || (imgApis[0] ? imgApis[0].id : '');
+  renderImgApiSelect();
+  loadImgApiFields();
   $('#modal-settings').classList.remove('hidden');
 }
 
@@ -708,6 +732,7 @@ function saveSettings() {
   settings.len = $('#cfg-len').value;
   settings.instr = $('#cfg-instr').value.trim();
   settings.css = $('#cfg-css').value;
+  saveImgApiFields();
   saveAll();
   applyCustomCSS();
   $('#modal-settings').classList.add('hidden');
@@ -814,6 +839,444 @@ function renameTitle() {
   };
   input.addEventListener('blur', done);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+}
+
+/* ---------- 生图工坊 & 图库 ---------- */
+
+let imgApis = NAI.loadImgApis();
+let imgStyles = NAI.loadImgStyles();
+let gallery = NAI.loadGallery();
+const IMG_OPT_KEY = 'inkan.imgopts.v1';
+let imgOpts = NAI.lsGet(IMG_OPT_KEY, { pos: '', neg: '', activeApi: imgApis[0] ? imgApis[0].id : '' });
+let illustCtx = null; // { msgIdx, fragIdx, mode, vibe }
+let illBusy = false;
+let editImgApiId = imgApis[0] ? imgApis[0].id : '';
+
+function curImgApi() { return imgApis.find(a => a.id === imgOpts.activeApi) || imgApis[0]; }
+function saveImgData() {
+  NAI.lsSet(NAI.LSK.imgApi, imgApis);
+  NAI.lsSet(NAI.LSK.imgStyles, imgStyles);
+  NAI.lsSet(NAI.LSK.gallery, gallery);
+  NAI.lsSet(IMG_OPT_KEY, imgOpts);
+}
+
+function ensureIllust(m) {
+  if (!m.illust || !Array.isArray(m.illust.fragments) || !m.illust.fragments.length) {
+    const paras = (m.content || '').split(/\n\s*\n/).map(t => t.trim()).filter(Boolean);
+    const list = paras.length > 1 ? paras : [(m.content || '').trim() || '（空片段）'];
+    m.illust = {
+      fragments: list.map(t => ({ id: NAI.uid2(), text: t, note: '', autoCount: 0, imageIds: [], mainId: null }))
+    };
+    saveAll();
+  }
+  return m.illust;
+}
+
+function illustMsg() {
+  const s = activeSession();
+  if (!s || !illustCtx) return null;
+  return s.messages[illustCtx.msgIdx] || null;
+}
+function currentFrag() {
+  const m = illustMsg();
+  if (!m) return null;
+  return ensureIllust(m).fragments[illustCtx.fragIdx] || m.illust.fragments[0] || null;
+}
+
+async function openIllust(idx) {
+  const s = activeSession();
+  const m = s && s.messages[idx];
+  if (!m) return;
+  ensureIllust(m);
+  illustCtx = { msgIdx: idx, fragIdx: 0, mode: 'off', vibe: null };
+  renderIllustFragments();
+  renderIllustStyles();
+  renderIllustOptions();
+  setVibeMode('off');
+  $('#ill-pos').value = imgOpts.pos || '';
+  $('#ill-neg').value = imgOpts.neg || '';
+  loadFragmentFields();
+  renderIllPreview();
+  $('#modal-illust').classList.remove('hidden');
+  hydrateIllust($('#ill-preview'));
+}
+
+function renderIllustFragments() {
+  const sel = $('#ill-fragment');
+  const m = illustMsg();
+  sel.innerHTML = '';
+  if (!m) return;
+  ensureIllust(m).fragments.forEach((f, i) => {
+    const o = document.createElement('option');
+    o.value = i;
+    o.textContent = `片段 ${i + 1} · ${f.text.slice(0, 14)}${f.text.length > 14 ? '…' : ''}${f.imageIds.length ? `（已配 ${f.imageIds.length} 图）` : ''}`;
+    sel.appendChild(o);
+  });
+  sel.value = illustCtx.fragIdx;
+}
+
+function renderIllustStyles() {
+  const sel = $('#ill-style');
+  sel.innerHTML = '<option value="">（不用预设）</option>';
+  imgStyles.forEach(st => {
+    const o = document.createElement('option');
+    o.value = st.id;
+    o.textContent = (st.group ? `[${st.group}] ` : '') + st.name;
+    sel.appendChild(o);
+  });
+}
+
+function renderIllustOptions() {
+  const size = $('#ill-size');
+  if (!size.options.length) {
+    NAI.SIZE_PRESETS.forEach((p, i) => {
+      const o = document.createElement('option');
+      o.value = i; o.textContent = p.label;
+      size.appendChild(o);
+    });
+    NAI.SAMPLERS.forEach(sm => {
+      const o = document.createElement('option');
+      o.value = sm; o.textContent = sm;
+      $('#ill-sampler').appendChild(o);
+    });
+  }
+}
+
+function loadFragmentFields() {
+  const f = currentFrag();
+  if (!f) return;
+  $('#ill-text').value = f.text;
+  $('#ill-note').value = f.note || '';
+  $('#ill-count').value = f.autoCount || 0;
+  $('#ill-style').value = f.styleId || '';
+}
+
+function persistFragmentFields() {
+  const f = currentFrag();
+  if (!f) return;
+  f.text = $('#ill-text').value;
+  f.note = $('#ill-note').value.trim();
+  f.autoCount = Math.max(0, Math.min(4, Number($('#ill-count').value) || 0));
+  f.styleId = $('#ill-style').value || '';
+  saveAll();
+}
+
+function persistPromptFields() {
+  imgOpts.pos = $('#ill-pos').value;
+  imgOpts.neg = $('#ill-neg').value;
+  saveImgData();
+}
+
+function currentPrompt() {
+  const f = currentFrag();
+  if (!f) return '';
+  const body = (f.text || '').slice(0, 120);
+  const pos = ($('#ill-pos').value || '').trim();
+  const note = f.note || '';
+  if (pos) return pos.replace(/\{content\}/g, body) + (note ? (pos ? ', ' : '') + note : '');
+  return body + (note ? ', ' + note : '');
+}
+
+function setVibeMode(mode) {
+  illustCtx = illustCtx || { mode: 'off', vibe: null };
+  illustCtx.mode = mode;
+  $('#vibe-off').classList.toggle('active', mode === 'off');
+  $('#vibe-vibe').classList.toggle('active', mode === 'vibe');
+  $('#vibe-precise').classList.toggle('active', mode === 'precise');
+  $('#vibe-detail').classList.toggle('hidden', mode === 'off');
+  $('#vibe-strength-wrap').classList.toggle('hidden', mode !== 'vibe');
+  $('#vibe-info-wrap').classList.toggle('hidden', mode !== 'vibe');
+  $('#vibe-reftype-wrap').classList.toggle('hidden', mode !== 'precise');
+  $('#vibe-fidelity-wrap').classList.toggle('hidden', mode !== 'precise');
+}
+
+function dataUriToBlob(uri) {
+  const [meta, b64] = uri.split(',');
+  const mime = (meta.match(/data:([^;]+)/) || [, 'image/png'])[1];
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+function buildIllCfg() {
+  const size = NAI.SIZE_PRESETS[Number($('#ill-size').value)] || NAI.SIZE_PRESETS[0];
+  return {
+    prompt: currentPrompt(),
+    negative: ($('#ill-neg').value || '').trim(),
+    width: size.w, height: size.h,
+    steps: Number($('#ill-steps').value) || 28,
+    scale: Number($('#ill-scale').value) || 5,
+    sampler: $('#ill-sampler').value,
+    seed: ($('#ill-seed').value || '').trim(),
+    reference: (illustCtx && illustCtx.mode !== 'off' && illustCtx.vibe) ? {
+      mode: illustCtx.mode, dataUri: illustCtx.vibe,
+      strength: Number($('#vibe-strength').value), information: Number($('#vibe-info').value),
+      refType: $('#vibe-reftype').value, fidelity: Number($('#vibe-fidelity').value)
+    } : null
+  };
+}
+
+async function illGenerate(times) {
+  if (illBusy) return toast('正在生成中，请稍候');
+  const api = curImgApi();
+  const f = currentFrag();
+  if (!f) return toast('请选择片段');
+  persistFragmentFields();
+  persistPromptFields();
+  const cfg = buildIllCfg();
+  if (!cfg.prompt) return toast('提示词为空，请填写片段内容或正面提示词');
+  illBusy = true;
+  $('#btn-ill-generate').disabled = true;
+  $('#btn-ill-batch').disabled = true;
+  const n = times || Math.max(1, Number($('#ill-count').value) || 1);
+  const errors = [];
+  for (let i = 0; i < n; i++) {
+    try {
+      toast(`生成中 ${i + 1}/${n}…`);
+      const uris = await NAI.generateImage(api, cfg);
+      for (const uri of uris) {
+        const id = NAI.uid2();
+        await NAI.putImageBlob(id, dataUriToBlob(uri));
+        f.imageIds.push(id);
+        if (!f.mainId) f.mainId = id;
+        gallery.push({
+          id, sessionId: activeId, msgIdx: illustCtx.msgIdx, fragId: f.id,
+          seed: cfg.seed || null,
+          params: { width: cfg.width, height: cfg.height, steps: cfg.steps, scale: cfg.scale, sampler: cfg.sampler, prompt: cfg.prompt, negative: cfg.negative },
+          createdAt: Date.now()
+        });
+      }
+      saveAll(); saveImgData();
+      renderIllustFragments();
+      renderIllPreview();
+      renderMessages();
+      await hydrateIllust();
+    } catch (e) {
+      errors.push(`第${i + 1}张：${e.message}`);
+    }
+  }
+  illBusy = false;
+  $('#btn-ill-generate').disabled = false;
+  $('#btn-ill-batch').disabled = false;
+  toast(errors.length ? `完成，但${errors.length}张失败：${errors[0]}` : '生成完成');
+}
+
+async function illBatch() {
+  if (illBusy) return toast('正在生成中，请稍候');
+  const m = illustMsg();
+  if (!m) return;
+  persistFragmentFields();
+  const plan = m.illust.fragments.map((f, i) => ({ f, i })).filter(x => x.f.autoCount > 0);
+  if (!plan.length) return toast('没有片段设置自动张数（>0），无法批量');
+  for (const { f, i } of plan) {
+    illustCtx.fragIdx = i;
+    $('#ill-fragment').value = i;
+    loadFragmentFields();
+    renderIllustFragments();
+    await illGenerate(f.autoCount);
+  }
+  toast('整章批量生图结束');
+}
+
+function renderIllPreview() {
+  const box = $('#ill-preview');
+  const f = currentFrag();
+  box.innerHTML = '';
+  if (!f || !f.imageIds.length) {
+    box.innerHTML = '<div class="illust-empty">本片段还没有生成图</div>';
+    return;
+  }
+  f.imageIds.forEach((id, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'ill-thumb' + (id === f.mainId ? ' main' : '');
+    const img = document.createElement('img');
+    img.dataset.imgid = id;
+    img.alt = `生成图 ${i + 1}`;
+    img.title = '点击设为片段主图';
+    img.addEventListener('click', () => {
+      f.mainId = id; saveAll(); renderIllPreview(); renderMessages(); hydrateIllust(); toast('已设为片段主图');
+    });
+    const num = document.createElement('span');
+    num.className = 'ill-num';
+    num.textContent = String(i + 1);
+    wrap.appendChild(img);
+    wrap.appendChild(num);
+    box.appendChild(wrap);
+    NAI.getImageUrl(id).then(u => { if (u) img.src = u; });
+  });
+}
+
+async function illTranslate() {
+  const fields = ['#ill-pos', '#ill-neg', '#ill-note'];
+  let unmatched = [];
+  for (const sel of fields) {
+    const el = $(sel);
+    const { result, unmatched: u } = NAI.translateZhToEn(el.value);
+    if (result) el.value = result;
+    unmatched.push(...u);
+  }
+  persistFragmentFields(); persistPromptFields();
+  toast(unmatched.length ? `已翻译，未覆盖词：${unmatched.slice(0, 6).join('、')}（请手改）` : '已全部翻译为英文');
+}
+
+async function illImportMeta() {
+  const inp = document.createElement('input');
+  inp.type = 'file';
+  inp.accept = 'image/png';
+  inp.onchange = async () => {
+    const file = inp.files[0];
+    if (!file) return;
+    const meta = await NAI.parsePngMetadata(file);
+    if (!meta) return toast('未找到 PNG 元数据');
+    if (meta.prompt) $('#ill-pos').value = meta.prompt;
+    if (meta.negative) $('#ill-neg').value = meta.negative;
+    if (meta.width) {
+      const i = NAI.SIZE_PRESETS.findIndex(s => s.w === meta.width && s.h === meta.height);
+      if (i >= 0) $('#ill-size').value = String(i);
+      else { $('#ill-steps').value = meta.steps || $('#ill-steps').value; }
+    }
+    if (meta.steps) $('#ill-steps').value = meta.steps;
+    if (meta.scale != null) $('#ill-scale').value = meta.scale;
+    if (meta.sampler) {
+      const has = [...$('#ill-sampler').options].some(o => o.value === meta.sampler);
+      if (has) $('#ill-sampler').value = meta.sampler;
+    }
+    if (meta.seed != null) $('#ill-seed').value = meta.seed;
+    persistPromptFields();
+    toast('已从 PNG 元数据回填参数');
+  };
+  inp.click();
+}
+
+/* ---------- 图库 ---------- */
+
+let galleryViewing = null;
+
+function openGallery() {
+  $('#gallery-detail').classList.add('hidden');
+  $('#gallery-grid').classList.remove('hidden');
+  renderGalleryGrid();
+  $('#modal-gallery').classList.remove('hidden');
+}
+
+function renderGalleryGrid() {
+  const grid = $('#gallery-grid');
+  grid.innerHTML = '';
+  $('#gallery-empty').classList.toggle('hidden', gallery.length > 0);
+  [...gallery].reverse().forEach(g => {
+    const wrap = document.createElement('div');
+    wrap.className = 'gallery-thumb';
+    const img = document.createElement('img');
+    img.alt = '生成图';
+    NAI.getImageUrl(g.id).then(u => { if (u) img.src = u; });
+    img.addEventListener('click', () => showGalleryDetail(g));
+    wrap.appendChild(img);
+    grid.appendChild(wrap);
+  });
+}
+
+function showGalleryDetail(g) {
+  galleryViewing = g;
+  $('#gallery-grid').classList.add('hidden');
+  const d = $('#gallery-detail');
+  d.classList.remove('hidden');
+  const img = $('#gallery-img');
+  img.removeAttribute('src');
+  NAI.getImageUrl(g.id).then(u => { if (u) img.src = u; });
+  const p = g.params || {};
+  $('#gallery-meta').innerHTML = '';
+  const lines = [
+    p.prompt || '',
+    p.negative ? '负向：' + p.negative : '',
+    `${p.width}×${p.height} · steps ${p.steps} · scale ${p.scale} · ${p.sampler}${g.seed ? ' · seed ' + g.seed : ''}`,
+    `生成时间：${new Date(g.createdAt).toLocaleString('zh-CN')}`
+  ].filter(Boolean);
+  lines.forEach(t => {
+    const el = document.createElement('p');
+    el.textContent = t;
+    $('#gallery-meta').appendChild(el);
+  });
+}
+
+async function galleryDownload() {
+  if (!galleryViewing) return;
+  const blob = await NAI.getImageBlob(galleryViewing.id);
+  if (!blob) return toast('图片数据不存在');
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `inkan-${galleryViewing.id}.png`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
+function galleryRemove() {
+  const g = galleryViewing;
+  if (!g) return;
+  askConfirm('从图库删除该图？片段引用会一并移除。', () => {
+    gallery = gallery.filter(x => x.id !== g.id);
+    for (const s of sessions) {
+      const m = s.messages[g.msgIdx];
+      if (m && m.illust) {
+        for (const f of m.illust.fragments) {
+          f.imageIds = f.imageIds.filter(x => x !== g.id);
+          if (f.mainId === g.id) f.mainId = f.imageIds[0] || null;
+        }
+      }
+    }
+    NAI.deleteImageBlob(g.id);
+    saveImgData(); saveAll();
+    galleryViewing = null;
+    $('#gallery-detail').classList.add('hidden');
+    $('#gallery-grid').classList.remove('hidden');
+    renderGalleryGrid(); renderMessages(); hydrateIllust();
+    toast('已删除');
+  });
+}
+
+/* ---------- 生图 API 预设（设置弹窗） ---------- */
+
+function curImgApiEdit() { return imgApis.find(a => a.id === editImgApiId); }
+
+function renderImgApiSelect() {
+  const sel = $('#cfg-imgapi');
+  sel.innerHTML = '';
+  imgApis.forEach(a => {
+    const o = document.createElement('option');
+    o.value = a.id;
+    o.textContent = a.name || '未命名预设';
+    sel.appendChild(o);
+  });
+  sel.value = editImgApiId;
+}
+
+function loadImgApiFields() {
+  const a = curImgApiEdit();
+  if (!a) return;
+  $('#cfg-img-name').value = a.name || '';
+  $('#cfg-img-base').value = a.base || '';
+  $('#cfg-img-key').value = a.key || '';
+  $('#cfg-img-model').value = a.model || '';
+}
+
+function saveImgApiFields() {
+  const a = curImgApiEdit();
+  if (!a) return;
+  a.name = $('#cfg-img-name').value.trim() || '未命名预设';
+  a.base = $('#cfg-img-base').value.trim();
+  a.key = $('#cfg-img-key').value.trim();
+  a.model = $('#cfg-img-model').value.trim();
+  imgOpts.activeApi = a.id;
+  saveImgData();
+}
+
+async function testImgApi() {
+  saveImgApiFields();
+  const btn = $('#btn-imgapi-test');
+  btn.disabled = true; btn.textContent = '测试中…';
+  const r = await NAI.testImageApi(curImgApiEdit());
+  toast(r.msg);
+  btn.disabled = false; btn.textContent = '测试连接';
 }
 
 /* ---------- 初始化 ---------- */
@@ -929,6 +1392,100 @@ function init() {
   });
 
   bindLongPress();
+
+  /* --- 生图接线 --- */
+  $('#btn-gallery').addEventListener('click', openGallery);
+  $('#gallery-download').addEventListener('click', galleryDownload);
+  $('#gallery-remove').addEventListener('click', galleryRemove);
+  $('#gallery-back').addEventListener('click', () => {
+    $('#gallery-detail').classList.add('hidden');
+    $('#gallery-grid').classList.remove('hidden');
+    renderGalleryGrid();
+  });
+
+  $('#cfg-imgapi').addEventListener('change', () => {
+    editImgApiId = $('#cfg-imgapi').value;
+    loadImgApiFields();
+  });
+  $('#btn-imgapi-add').addEventListener('click', () => {
+    const a = { id: NAI.uid2(), name: '生图预设 ' + (imgApis.length + 1), base: '', key: '', model: 'nai-diffusion-4-5-full' };
+    imgApis.push(a);
+    editImgApiId = a.id;
+    renderImgApiSelect(); loadImgApiFields();
+    toast('已新增生图预设，填写后点「保存」');
+  });
+  $('#btn-imgapi-del').addEventListener('click', () => {
+    if (imgApis.length <= 1) return toast('至少保留一套生图预设');
+    const a = curImgApiEdit();
+    askConfirm(`删除生图预设「${a.name}」？`, () => {
+      imgApis = imgApis.filter(x => x.id !== editImgApiId);
+      if (imgOpts.activeApi === editImgApiId) imgOpts.activeApi = imgApis[0].id;
+      editImgApiId = imgOpts.activeApi;
+      renderImgApiSelect(); loadImgApiFields(); saveImgData();
+      toast('生图预设已删除');
+    });
+  });
+  $('#btn-imgapi-test').addEventListener('click', testImgApi);
+  $('#btn-illust-open').addEventListener('click', () => {
+    const s = activeSession();
+    if (!s || !s.messages.length) return toast('当前章节还没有正文');
+    const idx = (() => { for (let i = s.messages.length - 1; i >= 0; i--) if (s.messages[i].role === 'assistant') return i; return -1; })();
+    if (idx < 0) return toast('本章还没有 AI 正文可配图');
+    $('#modal-settings').classList.add('hidden');
+    openIllust(idx);
+  });
+
+  $('#ill-fragment').addEventListener('change', () => {
+    persistFragmentFields();
+    illustCtx.fragIdx = Number($('#ill-fragment').value) || 0;
+    loadFragmentFields();
+    renderIllPreview();
+  });
+  ['ill-text', 'ill-note', 'ill-count', 'ill-style'].forEach(id => {
+    $('#' + id).addEventListener('change', persistFragmentFields);
+  });
+  $('#ill-style').addEventListener('change', () => {
+    const st = imgStyles.find(x => x.id === $('#ill-style').value);
+    if (!st) return;
+    if (st.pos) $('#ill-pos').value = st.pos;
+    if (st.neg) $('#ill-neg').value = st.neg;
+    const p = st.params || {};
+    if (p.width) {
+      const i = NAI.SIZE_PRESETS.findIndex(s => s.w === p.width && s.h === p.height);
+      if (i >= 0) $('#ill-size').value = String(i);
+    }
+    if (p.steps) $('#ill-steps').value = p.steps;
+    if (p.scale != null) $('#ill-scale').value = p.scale;
+    if (p.sampler) $('#ill-sampler').value = p.sampler;
+    persistPromptFields();
+  });
+  ['ill-pos', 'ill-neg'].forEach(id => $('#' + id).addEventListener('change', persistPromptFields));
+  $('#btn-ill-translate').addEventListener('click', illTranslate);
+  $('#btn-ill-import-meta').addEventListener('click', illImportMeta);
+  $('#btn-ill-generate').addEventListener('click', () => illGenerate());
+  $('#btn-ill-batch').addEventListener('click', illBatch);
+
+  $('#vibe-off').addEventListener('click', () => setVibeMode('off'));
+  $('#vibe-vibe').addEventListener('click', () => setVibeMode('vibe'));
+  $('#vibe-precise').addEventListener('click', () => setVibeMode('precise'));
+  $('#vibe-pick').addEventListener('click', () => $('#vibe-file').click());
+  $('#vibe-file').addEventListener('change', () => {
+    const file = $('#vibe-file').files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      illustCtx.vibe = reader.result;
+      const pv = $('#vibe-preview');
+      pv.src = reader.result;
+      pv.classList.remove('hidden');
+      toast('参考图已就绪');
+    };
+    reader.readAsDataURL(file);
+  });
+  [['vibe-strength', 'vibe-strength-val'], ['vibe-info', 'vibe-info-val'], ['vibe-fidelity', 'vibe-fidelity-val']].forEach(([s, v]) => {
+    $('#' + s).addEventListener('input', () => { $('#' + v).textContent = $('#' + s).value; });
+  });
+
   renderAll();
 }
 

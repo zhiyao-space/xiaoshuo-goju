@@ -19,6 +19,10 @@
     </div>
     <div id="session-list" class="session-list"></div>
     <div class="side-foot">
+      <button id="btn-gallery" class="side-btn" title="图库">
+        <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M21 3H3a1 1 0 00-1 1v16a1 1 0 001 1h18a1 1 0 001-1V4a1 1 0 00-1-1zm-1 2v9.5l-4.2-4.2a1 1 0 00-1.4 0L9 15.7l-2.3-2.3a1 1 0 00-1.4 0L4 14.7V5h16zM8 9a2 2 0 110-4 2 2 0 010 4z"/></svg>
+        <span>图库</span>
+      </button>
       <button id="btn-export" class="side-btn" title="导出本章">
         <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 3v10.586l-3.293-3.293-1.414 1.414L12 16.414l4.707-4.707-1.414-1.414L12 13.586V3h2V1h-4v2h2zM5 19h14v2H5v-2z"/></svg>
         <span>导出章节</span>
@@ -78,6 +82,7 @@
       <div class="modal-tabs">
         <button class="tab active" data-tab="api">API 接入</button>
         <button class="tab" data-tab="style">文风设定</button>
+        <button class="tab" data-tab="img">生图接入</button>
         <button class="tab" data-tab="skin">界面美化</button>
       </div>
       <button class="icon-btn modal-close" data-close="modal-settings">✕</button>
@@ -173,6 +178,40 @@
         </label>
       </section>
 
+      <section class="tab-pane" id="pane-img">
+        <div class="preset-row">
+          <label class="field">
+            <span>生图 API 预设（空悲切线路）</span>
+            <select id="cfg-imgapi"></select>
+          </label>
+          <button id="btn-imgapi-add" class="btn">＋ 新增</button>
+          <button id="btn-imgapi-del" class="btn btn-ghost">删除</button>
+        </div>
+        <div class="field-row">
+          <label class="field">
+            <span>备注名称</span>
+            <input id="cfg-img-name" type="text" placeholder="例：空悲切主力">
+          </label>
+          <label class="field">
+            <span>模型名</span>
+            <input id="cfg-img-model" type="text" placeholder="nai-diffusion-4-5-full">
+          </label>
+        </div>
+        <label class="field">
+          <span>生图 API 地址（OpenAI 兼容，以 /v1 结尾）</span>
+          <input id="cfg-img-base" type="text" placeholder="https://api.blanka.cc/v1">
+        </label>
+        <label class="field">
+          <span>生图 API Key</span>
+          <input id="cfg-img-key" type="password" placeholder="sk-...（仅保存在本地浏览器）">
+        </label>
+        <div class="skin-actions">
+          <button id="btn-imgapi-test" class="btn">测试连接</button>
+          <button id="btn-illust-open" class="btn">打开生图工坊</button>
+        </div>
+        <p class="hint">生图走空悲切 NovelAI 兼容线路（OpenAI Chat 协议），浏览器直连需要线路允许 CORS；测试失败多为线路拦截浏览器请求。</p>
+      </section>
+
       <section class="tab-pane" id="pane-skin">
         <label class="field">
           <span>自定义美化 CSS（实时生效，最高优先级）</span>
@@ -219,8 +258,151 @@
   </div>
 </div>
 
+<div id="modal-illust" class="modal hidden">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <div style="font-size:15px;font-weight:600;letter-spacing:1px">生图工坊</div>
+      <button class="icon-btn modal-close" data-close="modal-illust">✕</button>
+    </div>
+    <div class="modal-body illust-body">
+      <div class="illust-grid">
+        <div class="illust-left">
+          <label class="field">
+            <span>选片段（当前章节正文按段切分）</span>
+            <select id="ill-fragment"></select>
+          </label>
+          <label class="field">
+            <span>片段内容（可编辑）</span>
+            <textarea id="ill-text" rows="5"></textarea>
+          </label>
+          <div class="field-row">
+            <label class="field">
+              <span>备注（画面对象提示）</span>
+              <input id="ill-note" type="text" placeholder="例：主角雨夜持剑站在城楼上">
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span>画风预设</span>
+              <select id="ill-style"></select>
+            </label>
+            <label class="field">
+              <span>本段自动张数</span>
+              <input id="ill-count" type="number" min="0" max="4" value="1">
+            </label>
+          </div>
+          <button id="btn-ill-translate" class="btn">中文 → 英文（内置词典）</button>
+        </div>
+        <div class="illust-right">
+          <label class="field">
+            <span>正面提示词（{content} 占位片段内容，留空则只用片段）</span>
+            <textarea id="ill-pos" rows="4" spellcheck="false"></textarea>
+          </label>
+          <label class="field">
+            <span>负面提示词</span>
+            <textarea id="ill-neg" rows="2" spellcheck="false" placeholder="例：lowres, bad anatomy, bad hands, watermark"></textarea>
+          </label>
+          <div class="field-row">
+            <label class="field">
+              <span>尺寸</span>
+              <select id="ill-size"></select>
+            </label>
+            <label class="field">
+              <span>Steps</span>
+              <input id="ill-steps" type="number" min="1" max="50" value="28">
+            </label>
+            <label class="field">
+              <span>Scale</span>
+              <input id="ill-scale" type="number" min="1" max="10" step="0.5" value="5">
+            </label>
+          </div>
+          <div class="field-row">
+            <label class="field">
+              <span>Sampler</span>
+              <select id="ill-sampler"></select>
+            </label>
+            <label class="field">
+              <span>Seed（留空随机）</span>
+              <input id="ill-seed" type="text" placeholder="随机">
+            </label>
+          </div>
+          <div class="vibe-box">
+            <div class="vibe-modes">
+              <button id="vibe-off" class="btn btn-vibe active">无参考</button>
+              <button id="vibe-vibe" class="btn btn-vibe">氛围转移 Vibe</button>
+              <button id="vibe-precise" class="btn btn-vibe">精准参考</button>
+            </div>
+            <div id="vibe-detail" class="hidden">
+              <div class="vibe-row">
+                <input id="vibe-file" type="file" accept="image/png,image/jpeg,image/webp" class="hidden">
+                <button id="vibe-pick" class="btn">选择参考图</button>
+                <img id="vibe-preview" class="vibe-preview hidden" alt="参考图">
+              </div>
+              <div class="field-row">
+                <label class="field vibe-slider hidden" id="vibe-strength-wrap">
+                  <span>参考强度 <b id="vibe-strength-val">0.6</b></span>
+                  <input id="vibe-strength" type="range" min="0" max="1" step="0.05" value="0.6">
+                </label>
+                <label class="field vibe-slider hidden" id="vibe-info-wrap">
+                  <span>信息提取 <b id="vibe-info-val">0.8</b></span>
+                  <input id="vibe-info" type="range" min="0" max="1" step="0.05" value="0.8">
+                </label>
+                <label class="field hidden" id="vibe-reftype-wrap">
+                  <span>参考类型</span>
+                  <select id="vibe-reftype">
+                    <option value="character">人物</option>
+                    <option value="object">物体</option>
+                    <option value="style">画风</option>
+                    <option value="composition">构图</option>
+                  </select>
+                </label>
+                <label class="field vibe-slider hidden" id="vibe-fidelity-wrap">
+                  <span>保真度 <b id="vibe-fidelity-val">0.8</b></span>
+                  <input id="vibe-fidelity" type="range" min="0" max="1" step="0.05" value="0.8">
+                </label>
+              </div>
+            </div>
+          </div>
+          <div class="illust-actions">
+            <button id="btn-ill-import-meta" class="btn">从 NAI PNG 导入参数</button>
+            <button id="btn-ill-generate" class="btn btn-primary">生成图片</button>
+            <button id="btn-ill-batch" class="btn">整章批量生图</button>
+          </div>
+        </div>
+      </div>
+      <div class="illust-result">
+        <div class="illust-result-head">本片段预览（点图设为片段主图 · 右下角数字为生成序号）</div>
+        <div id="ill-preview" class="illust-preview"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="modal-gallery" class="modal hidden">
+  <div class="modal-box modal-wide">
+    <div class="modal-head">
+      <div style="font-size:15px;font-weight:600;letter-spacing:1px">图库</div>
+      <button class="icon-btn modal-close" data-close="modal-gallery">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="gallery-grid" class="gallery-grid"></div>
+      <div id="gallery-detail" class="hidden">
+        <img id="gallery-img" alt="大图">
+        <div id="gallery-meta" class="gallery-meta"></div>
+        <div class="skin-actions">
+          <button id="gallery-download" class="btn">下载原图</button>
+          <button id="gallery-remove" class="btn btn-ghost">删除图片</button>
+          <button id="gallery-back" class="btn btn-primary">返回图库</button>
+        </div>
+      </div>
+      <div id="gallery-empty" class="hidden" style="text-align:center;color:var(--text-faint);padding:24px 0;font-size:13px">还没有生成图，去消息长按菜单「配图」或生图工坊试试</div>
+    </div>
+  </div>
+</div>
+
 <div id="toast" class="toast hidden"></div>
 
+<script src="nai.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
