@@ -327,40 +327,43 @@
             </label>
           </div>
           <div class="vibe-box">
-            <div class="vibe-modes">
-              <button id="vibe-off" class="btn btn-vibe active">无参考</button>
-              <button id="vibe-vibe" class="btn btn-vibe">氛围转移 Vibe</button>
-              <button id="vibe-precise" class="btn btn-vibe">精准参考</button>
+            <div class="vibe-row">
+              <input id="vibe-file" type="file" accept="image/png,image/jpeg,image/webp,.zip" class="hidden">
+              <button id="vibe-pick-img" class="btn">＋ 图片参考</button>
+              <button id="vibe-pick-zip" class="btn">＋ Vibe ZIP</button>
+              <button id="vibe-clear" class="btn btn-vibe">移除参考</button>
+              <img id="vibe-preview" class="vibe-preview hidden" alt="参考图">
+              <span id="vibe-name" class="vibe-name hidden"></span>
             </div>
             <div id="vibe-detail" class="hidden">
-              <div class="vibe-row">
-                <input id="vibe-file" type="file" accept="image/png,image/jpeg,image/webp" class="hidden">
-                <button id="vibe-pick" class="btn">选择参考图</button>
-                <img id="vibe-preview" class="vibe-preview hidden" alt="参考图">
-              </div>
-              <div class="field-row">
-                <label class="field vibe-slider hidden" id="vibe-strength-wrap">
-                  <span>参考强度 <b id="vibe-strength-val">0.6</b></span>
-                  <input id="vibe-strength" type="range" min="0" max="1" step="0.05" value="0.6">
-                </label>
-                <label class="field vibe-slider hidden" id="vibe-info-wrap">
-                  <span>信息提取 <b id="vibe-info-val">0.8</b></span>
-                  <input id="vibe-info" type="range" min="0" max="1" step="0.05" value="0.8">
-                </label>
-                <label class="field hidden" id="vibe-reftype-wrap">
-                  <span>参考类型</span>
-                  <select id="vibe-reftype">
-                    <option value="character">人物</option>
-                    <option value="object">物体</option>
-                    <option value="style">画风</option>
-                    <option value="composition">构图</option>
-                  </select>
-                </label>
-                <label class="field vibe-slider hidden" id="vibe-fidelity-wrap">
-                  <span>保真度 <b id="vibe-fidelity-val">0.8</b></span>
-                  <input id="vibe-fidelity" type="range" min="0" max="1" step="0.05" value="0.8">
-                </label>
-              </div>
+              <label class="field vibe-slider">
+                <span>参考强度 <b id="vibe-strength-val">0.6</b></span>
+                <input id="vibe-strength" type="range" min="0" max="1" step="0.05" value="0.6">
+              </label>
+              <details class="vibe-adv">
+                <summary>高级选项（信息提取 / 精准参考）</summary>
+                <div class="field-row">
+                  <label class="field vibe-slider">
+                    <span>信息提取 <b id="vibe-info-val">0.8</b></span>
+                    <input id="vibe-info" type="range" min="0" max="1" step="0.05" value="0.8">
+                  </label>
+                  <label class="field">
+                    <span>参考类型</span>
+                    <select id="vibe-reftype">
+                      <option value="character">人物</option>
+                      <option value="object">物体</option>
+                      <option value="style">画风</option>
+                      <option value="composition">构图</option>
+                    </select>
+                  </label>
+                  <label class="field vibe-slider">
+                    <span>保真度 <b id="vibe-fidelity-val">0.8</b></span>
+                    <input id="vibe-fidelity" type="range" min="0" max="1" step="0.05" value="0.8">
+                  </label>
+                </div>
+              </details>
+            </div>
+          </div>
             </div>
           </div>
  </div>
@@ -369,12 +372,17 @@
  <textarea id="charlib" rows="3" placeholder="例：林晓 | silver long hair, red eyes, white school uniform, shy expression"></textarea>
  </div>
  <div class="illust-actions">
-            <button id="btn-ill-auto" class="btn">AI 生成提示词</button>
-            <label class="auto-mode"><input type="checkbox" id="ill-auto-mode"> 全自动模式（批量时逐段 AI 提炼提示词）</label>
-            <button id="btn-ill-import-meta" class="btn">从 NAI PNG 导入参数</button>
-            <button id="btn-ill-resplit" class="btn">重新切分片段</button>
             <button id="btn-ill-generate" class="btn btn-primary">生成图片</button>
             <button id="btn-ill-batch" class="btn">整章批量生图</button>
+            <button id="btn-ill-auto" class="btn">AI 生成提示词</button>
+            <label class="auto-mode"><input type="checkbox" id="ill-auto-mode"> 全自动</label>
+            <details class="ill-tools">
+              <summary>更多工具</summary>
+              <div class="ill-tools-body">
+                <button id="btn-ill-import-meta" class="btn">从 NAI PNG 导入参数</button>
+                <button id="btn-ill-resplit" class="btn">重新切分片段</button>
+              </div>
+            </details>
           </div>
         </div>
       </div>

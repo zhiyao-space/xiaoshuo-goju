@@ -436,3 +436,12 @@ textarea, input, select { font-family: inherit; }
 
 .charlib-box { margin-top: 12px; }
 .charlib-box textarea { width: 100%; font-size: 12px; line-height: 1.6; padding: 8px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--panel-2); color: var(--text); font-family: var(--font-ui); resize: vertical; }
+
+
+/* ZIP Vibe + 简化参考区 */
+.vibe-name { font-size: 11px; color: var(--text-dim, #888); word-break: break-all; }
+.vibe-adv, .ill-tools { margin-top: 8px; font-size: 12px; color: var(--text-dim, #888); }
+.vibe-adv summary, .ill-tools summary { cursor: pointer; user-select: none; padding: 4px 0; letter-spacing: 1px; }
+.vibe-adv .field-row, .ill-tools-body { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 10px; }
+.ill-tools-body button { flex: 1 1 auto; }
+.illust-actions .btn-primary { flex-grow: 1; min-width: 130px; }

@@ -185,7 +185,81 @@ const NAI = (() => {
   }
 
   /* ---------- 生图参数 payload ---------- */
-  function buildPayload(cfg) {
+  
+/* ---------- ZIP 解析（NovelAI Vibe 导入包，零依赖） ---------- */
+function zipU16(v, o) { return v[o] | (v[o + 1] << 8); }
+function zipU32(v, o) { return (v[o] | (v[o + 1] << 8) | (v[o + 2] << 16) | (v[o + 3] << 24)) >>> 0; }
+async function zipInflateRaw(bytes) {
+  try {
+    const ds = new DecompressionStream('deflate-raw');
+    const stream = new Blob([bytes]).stream().pipeThrough(ds);
+    const buf = await new Response(stream).arrayBuffer();
+    return new Uint8Array(buf);
+  } catch (e) { throw new Error('此浏览器不支持 ZIP 解压（DecompressionStream），请改用 PNG 图片导入'); }
+}
+function zipBytesToDataUri(bytes, mime) {
+  let s = '';
+  for (let i = 0; i < bytes.length; i += 8192) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 8192));
+  return 'data:' + mime + ';base64,' + btoa(s);
+}
+async function zipListEntries(bytes) {
+  // 从末尾找 EOCD
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= Math.max(0, bytes.length - 65557); i--) {
+    if (zipU32(bytes, i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error('不是有效的 ZIP 文件');
+  const count = zipU16(bytes, eocd + 10);
+  let p = zipU32(bytes, eocd + 16);
+  const entries = [];
+  for (let i = 0; i < count; i++) {
+    if (zipU32(bytes, p) !== 0x02014b50) break;
+    const method = zipU16(bytes, p + 10);
+    const csize = zipU32(bytes, p + 20);
+    const nlen = zipU16(bytes, p + 28);
+    const elen = zipU16(bytes, p + 30);
+    const clen = zipU16(bytes, p + 32);
+    const lho = zipU32(bytes, p + 42);
+    const nameBytes = bytes.subarray(p + 46, p + 46 + nlen);
+    const name = new TextDecoder().decode(nameBytes);
+    // 本地文件头：跳过文件名+扩展字段得到数据起点
+    const lnlen = zipU16(bytes, lho + 26);
+    const lelen = zipU16(bytes, lho + 28);
+    const dataStart = lho + 30 + lnlen + lelen;
+    entries.push({ name, method, csize, dataStart });
+    p += 46 + nlen + elen + clen;
+  }
+  return entries;
+}
+async function zipReadEntry(bytes, e) {
+  const raw = bytes.subarray(e.dataStart, e.dataStart + e.csize);
+  if (e.method === 0) return raw;
+  if (e.method === 8) return await zipInflateRaw(raw);
+  throw new Error('不支持的 ZIP 压缩方法: ' + e.method);
+}
+async function extractVibeFromZip(file) {
+  const buf = new Uint8Array(await file.arrayBuffer());
+  const entries = await zipListEntries(buf);
+  // 1) 优先找 PNG
+  const png = entries.find(e => /\.png$/i.test(e.name));
+  if (png) {
+    const data = await zipReadEntry(buf, png);
+    return { type: 'image', dataUri: zipBytesToDataUri(data, 'image/png'), name: png.name };
+  }
+  // 2) 再找 vibe 编码文件
+  const vibe = entries.find(e => /\.(naiv4vibe|naivibe|json)$/i.test(e.name));
+  if (vibe) {
+    const data = await zipReadEntry(buf, vibe);
+    const text = new TextDecoder().decode(data);
+    let obj; try { obj = JSON.parse(text); } catch (e) { throw new Error('vibe 编码文件 JSON 解析失败'); }
+    let vectors = (obj.imageVectorsV4 || (obj.vibeTransfer && obj.vibeTransfer.imageVectors) || []).map(v => v.vector || v);
+    if (!vectors.length) throw new Error('vibe 编码文件里没有找到向量数据');
+    return { type: 'vectors', vectors, name: vibe.name };
+  }
+  throw new Error('ZIP 里没有找到 PNG 图片或 vibe 编码文件（.naiv4vibe / .naivibe）');
+}
+
+function buildPayload(cfg) {
     const payload = {
       prompt: cfg.prompt || '',
       negative_prompt: cfg.negative || '',
@@ -195,7 +269,11 @@ const NAI = (() => {
       sampler: cfg.sampler || 'k_euler_ancestral',
       seed: cfg.seed != null && cfg.seed !== '' ? Number(cfg.seed) : Math.floor(Math.random() * 2 ** 32)
     };
-    if (cfg.reference && cfg.reference.dataUri) {
+    if (cfg.reference && cfg.reference.vectors && cfg.reference.vectors.length) {
+      payload.reference_vibe_vectors = cfg.reference.vectors;
+      payload.reference_strength = cfg.reference.strength ?? 0.6;
+      payload.reference_information_extracted = cfg.reference.information ?? 0.8;
+    } else if (cfg.reference && cfg.reference.dataUri) {
       if (cfg.reference.mode === 'vibe') {
         payload.reference_image = cfg.reference.dataUri;
         payload.reference_strength = cfg.reference.strength ?? 0.6;
@@ -281,7 +359,7 @@ const NAI = (() => {
     LSK, SAMPLERS, SIZE_PRESETS,
     translateZhToEn,
     putImageBlob, getImageBlob, deleteImageBlob, getImageUrl,
-    parsePngMetadata, buildPayload, generateImage, testImageApi,
+    parsePngMetadata, buildPayload, generateImage, testImageApi, extractVibeFromZip,
     lsGet, lsSet, uid2,
     loadImgApis, loadImgStyles, loadGallery
   };

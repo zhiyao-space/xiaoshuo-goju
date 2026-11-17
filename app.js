@@ -1008,14 +1008,7 @@ function currentPrompt() {
 function setVibeMode(mode) {
   illustCtx = illustCtx || { mode: 'off', vibe: null };
   illustCtx.mode = mode;
-  $('#vibe-off').classList.toggle('active', mode === 'off');
-  $('#vibe-vibe').classList.toggle('active', mode === 'vibe');
-  $('#vibe-precise').classList.toggle('active', mode === 'precise');
   $('#vibe-detail').classList.toggle('hidden', mode === 'off');
-  $('#vibe-strength-wrap').classList.toggle('hidden', mode !== 'vibe');
-  $('#vibe-info-wrap').classList.toggle('hidden', mode !== 'vibe');
-  $('#vibe-reftype-wrap').classList.toggle('hidden', mode !== 'precise');
-  $('#vibe-fidelity-wrap').classList.toggle('hidden', mode !== 'precise');
 }
 
 function dataUriToBlob(uri) {
@@ -1037,8 +1030,10 @@ function buildIllCfg() {
     scale: Number($('#ill-scale').value) || 5,
     sampler: $('#ill-sampler').value,
     seed: ($('#ill-seed').value || '').trim(),
-    reference: (illustCtx && illustCtx.mode !== 'off' && illustCtx.vibe) ? {
-      mode: illustCtx.mode, dataUri: illustCtx.vibe,
+    reference: (illustCtx && illustCtx.mode !== 'off' && (illustCtx.vibe || (illustCtx.vibeVectors && illustCtx.vibeVectors.length))) ? {
+      mode: illustCtx.mode === 'precise' ? 'precise' : 'vibe',
+      dataUri: illustCtx.vibe,
+      vectors: illustCtx.vibeVectors,
       strength: Number($('#vibe-strength').value), information: Number($('#vibe-info').value),
       refType: $('#vibe-reftype').value, fidelity: Number($('#vibe-fidelity').value)
     } : null
@@ -1619,22 +1614,47 @@ function init() {
  $('#charlib').addEventListener('change', saveCharLib);
   $('#btn-ill-resplit').addEventListener('click', illResplit);
 
-  $('#vibe-off').addEventListener('click', () => setVibeMode('off'));
-  $('#vibe-vibe').addEventListener('click', () => setVibeMode('vibe'));
-  $('#vibe-precise').addEventListener('click', () => setVibeMode('precise'));
-  $('#vibe-pick').addEventListener('click', () => $('#vibe-file').click());
-  $('#vibe-file').addEventListener('change', () => {
+
+  $('#vibe-file').addEventListener('change', async () => {
     const file = $('#vibe-file').files[0];
+    $('#vibe-file').value = '';
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      illustCtx.vibe = reader.result;
-      const pv = $('#vibe-preview');
-      pv.src = reader.result;
-      pv.classList.remove('hidden');
-      toast('参考图已就绪');
-    };
-    reader.readAsDataURL(file);
+    const pv = $('#vibe-preview');
+    const nameEl = $('#vibe-name');
+    if (/\.zip$/i.test(file.name)) {
+      try {
+        const r = await NAI.extractVibeFromZip(file);
+        illustCtx.mode = 'vibe';
+        if (r.type === 'image') {
+          illustCtx.vibe = r.dataUri; illustCtx.vibeVectors = null;
+          pv.src = r.dataUri; pv.classList.remove('hidden');
+        } else {
+          illustCtx.vibeVectors = r.vectors; illustCtx.vibe = null;
+          pv.classList.add('hidden');
+        }
+        nameEl.textContent = (r.name || file.name) + (r.type === 'vectors' ? '（编码 vibe）' : '（参考图）');
+        nameEl.classList.remove('hidden');
+        setVibeMode('vibe');
+        toast(r.type === 'vectors' ? '已导入编码 vibe：' + r.vectors.length + ' 组向量' : '已导入 ZIP 内参考图');
+      } catch (e) { toast('ZIP 导入失败：' + e.message); }
+    } else {
+      const reader = new FileReader();
+      reader.onload = () => {
+        illustCtx.vibe = reader.result; illustCtx.vibeVectors = null;
+        pv.src = reader.result; pv.classList.remove('hidden');
+        nameEl.textContent = file.name + '（参考图）'; nameEl.classList.remove('hidden');
+        setVibeMode('vibe');
+        toast('参考图已就绪');
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+  $('#vibe-pick-img').addEventListener('click', () => $('#vibe-file').click());
+  $('#vibe-pick-zip').addEventListener('click', () => $('#vibe-file').click());
+  $('#vibe-clear').addEventListener('click', () => {
+    illustCtx.vibe = null; illustCtx.vibeVectors = null;
+    $('#vibe-preview').classList.add('hidden'); $('#vibe-name').classList.add('hidden');
+    setVibeMode('off'); toast('已移除参考');
   });
   [['vibe-strength', 'vibe-strength-val'], ['vibe-info', 'vibe-info-val'], ['vibe-fidelity', 'vibe-fidelity-val']].forEach(([s, v]) => {
     $('#' + s).addEventListener('input', () => { $('#' + v).textContent = $('#' + s).value; });
