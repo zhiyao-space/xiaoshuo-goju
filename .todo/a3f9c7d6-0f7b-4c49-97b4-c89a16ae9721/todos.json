@@ -1,0 +1,42 @@
+[
+  {
+    "id": "1",
+    "status": "in_progress",
+    "content": "初始化 Cloud 并部署文本转译 Edge Function",
+    "skills": [
+      "meoo-llm-ai",
+      "meoo-ai-runtime",
+      "meoo-cloud"
+    ]
+  },
+  {
+    "id": "2",
+    "status": "pending",
+    "content": "设计系统 styles.css + 共享契约 lib（API 配置存储 / 尺寸预设 / NAI 客户端 / ZIP vibe 解析）",
+    "skills": []
+  },
+  {
+    "id": "3",
+    "status": "pending",
+    "content": "生图 API 配置页（中转站格式，测试连接）",
+    "skills": []
+  },
+  {
+    "id": "4",
+    "status": "pending",
+    "content": "Vibe 编码导入管理页（zip/.naiv4vibe/.json）",
+    "skills": []
+  },
+  {
+    "id": "5",
+    "status": "pending",
+    "content": "片段生图工作台首页（中文→英文转译→生图→历史）",
+    "skills": []
+  },
+  {
+    "id": "6",
+    "status": "pending",
+    "content": "build + dev 验证交付",
+    "skills": []
+  }
+]
