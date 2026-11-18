@@ -7,6 +7,7 @@ import {
   createRootRouteWithContext,
   useRouterState,
 } from '@tanstack/react-router';
+import { Nav } from '@/components/Nav';
 
 function NotFoundComponent() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
@@ -33,8 +34,11 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider attribute="class" defaultTheme="light" enableSystem storageKey="meoo-theme">
-        <Outlet />
+      <ThemeProvider attribute="class" defaultTheme="dark" forcedTheme="dark" enableSystem={false} storageKey="meoo-theme">
+        <div className="min-h-screen bg-background text-foreground">
+          <Nav />
+          <Outlet />
+        </div>
       </ThemeProvider>
     </QueryClientProvider>
   );
